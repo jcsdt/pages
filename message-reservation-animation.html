@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Message Reservation and Fault Tolerance</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f8f9fb;
+            color: #1a1d29;
+            padding: 12px;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 4px;
+            color: #1a1d29;
+            font-weight: 700;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            text-align: center;
+            margin-bottom: 12px;
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        .section {
+            background: #ffffff;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        h2 {
+            margin-bottom: 8px;
+            color: #1a1d29;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        h3 {
+            color: #1a1d29;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .message-pool {
+            display: flex;
+            gap: 8px;
+            min-height: 70px;
+            background: #f3f4f6;
+            padding: 10px;
+            border-radius: 12px;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            border: 1px solid #e5e7eb;
+        }
+
+        .instances-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .instance-panel {
+            background: #ffffff;
+            padding: 12px;
+            border-radius: 12px;
+            border: 2px solid #e5e7eb;
+            transition: border-color 0.3s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .instance-panel.failed {
+            border-color: #ef4444;
+        }
+
+        .instance-panel.shutdown {
+            border-color: #9ca3af;
+            opacity: 0.6;
+        }
+
+        .instance-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .instance-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .heartbeat {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #0891b2;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        .heartbeat.stopped {
+            background: #9ca3af;
+            animation: none;
+        }
+
+        .heartbeat.failed {
+            background: #ef4444;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.6;
+                transform: scale(0.9);
+            }
+        }
+
+        .heartbeat-time {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .reserved-messages {
+            display: flex;
+            gap: 6px;
+            min-height: 60px;
+            background: #f3f4f6;
+            padding: 8px;
+            border-radius: 12px;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            border: 1px solid #e5e7eb;
+        }
+
+        .message {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            border: 2px solid;
+            position: relative;
+            flex-shrink: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .message.moving {
+            animation: messageMove 0.5s ease-out;
+        }
+
+        @keyframes messageMove {
+            0% {
+                opacity: 0.5;
+                transform: scale(0.8);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .message-id {
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .message-user {
+            font-size: 9px;
+            opacity: 0.8;
+        }
+
+        .user-a {
+            background: #4338ca;
+            border-color: #3730a3;
+            color: white;
+        }
+
+        .user-b {
+            background: #7c3aed;
+            border-color: #6d28d9;
+            color: white;
+        }
+
+        .user-c {
+            background: #0891b2;
+            border-color: #0e7490;
+            color: white;
+        }
+
+        .database-section {
+            background: #ffffff;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-bottom: 8px;
+        }
+
+        .db-table {
+            width: 100%;
+            background: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+
+        .db-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .db-table th {
+            background: #f9fafb;
+            padding: 6px 8px;
+            text-align: left;
+            color: #374151;
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        .db-table td {
+            padding: 6px 8px;
+            border-top: 1px solid #f3f4f6;
+            font-size: 11px;
+            color: #1a1d29;
+        }
+
+        .db-table tr:hover {
+            background: #f9fafb;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            background: #16213e;
+            border-radius: 8px;
+            border: 1px solid #0f3460;
+        }
+
+        button {
+            background: #4338ca;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 9999px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        button:hover:not(:disabled) {
+            background: #3730a3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(67, 56, 202, 0.25);
+        }
+
+        button:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+            transform: none;
+            color: #9ca3af;
+        }
+
+        button.danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        button.danger:hover:not(:disabled) {
+            background: #dc2626;
+            box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);
+        }
+
+        button.success {
+            background: #0891b2;
+            color: white;
+        }
+
+        button.success:hover:not(:disabled) {
+            background: #0e7490;
+            box-shadow: 0 4px 6px rgba(8, 145, 178, 0.25);
+        }
+
+        button.warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        button.warning:hover:not(:disabled) {
+            background: #d97706;
+            box-shadow: 0 4px 6px rgba(245, 158, 11, 0.2);
+        }
+
+        .stats {
+            padding: 10px;
+            background: #f3f4f6;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #374151;
+            font-weight: 500;
+            border: 1px solid #e5e7eb;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .status-unreserved {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-reserved {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .empty-state {
+            color: #9ca3af;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
+
+        .scenario-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            justify-content: center;
+        }
+
+        .log-section {
+            background: #f9fafb;
+            padding: 8px;
+            border-radius: 12px;
+            max-height: 100px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-timestamp {
+            color: #9ca3af;
+            margin-right: 8px;
+        }
+
+        .log-instance1 {
+            color: #4338ca;
+        }
+
+        .log-instance2 {
+            color: #7c3aed;
+        }
+
+        .log-error {
+            color: #ef4444;
+        }
+
+        .log-success {
+            color: #0891b2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Message Reservation and Fault Tolerance</h1>
+        <div class="subtitle">Multi-Instance Message Processing with Heartbeat Monitoring</div>
+
+        <div class="stats" id="stats">
+            Unreserved: 0 | Instance 1: 0 messages | Instance 2: 0 messages
+        </div>
+
+        <div class="scenario-buttons">
+            <button class="success" onclick="runScenario('normal')">▶ Normal Operation</button>
+            <button class="warning" onclick="runScenario('graceful')">▶ Graceful Shutdown</button>
+            <button class="danger" onclick="runScenario('failure')">▶ Instance Failure</button>
+            <button onclick="resetAll()">🔄 Reset All</button>
+        </div>
+
+        <div class="section">
+            <h2>Unreserved Messages (Database Pool)</h2>
+            <div class="message-pool" id="messagePool"></div>
+        </div>
+
+        <div class="instances-container">
+            <div class="instance-panel" id="instance1Panel">
+                <div class="instance-header">
+                    <div class="instance-title">
+                        <div class="heartbeat" id="heartbeat1"></div>
+                        <h2 style="margin: 0;">Instance 1</h2>
+                    </div>
+                    <div class="heartbeat-time" id="heartbeatTime1">Last: Never</div>
+                </div>
+                <div class="reserved-messages" id="reserved1"></div>
+            </div>
+
+            <div class="instance-panel" id="instance2Panel">
+                <div class="instance-header">
+                    <div class="instance-title">
+                        <div class="heartbeat" id="heartbeat2"></div>
+                        <h2 style="margin: 0;">Instance 2</h2>
+                    </div>
+                    <div class="heartbeat-time" id="heartbeatTime2">Last: Never</div>
+                </div>
+                <div class="reserved-messages" id="reserved2"></div>
+            </div>
+        </div>
+
+        <div class="database-section">
+            <h2>Database State</h2>
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                <div>
+                    <h3 style="color: #1a1d29; font-size: 14px; margin-bottom: 10px;">Messages Table</h3>
+                    <div class="db-table">
+                        <table id="dbTable">
+                            <thead>
+                                <tr>
+                                    <th>Message ID</th>
+                                    <th>Status</th>
+                                    <th>Instance ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dbTableBody">
+                                <tr><td colspan="3" class="empty-state">No messages in database</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <h3 style="color: #1a1d29; font-size: 14px; margin-bottom: 10px;">Heartbeat Table</h3>
+                    <div class="db-table">
+                        <table id="heartbeatTable">
+                            <thead>
+                                <tr>
+                                    <th>Instance ID</th>
+                                    <th>Last Heartbeat</th>
+                                </tr>
+                            </thead>
+                            <tbody id="heartbeatTableBody">
+                                <tr><td colspan="2" class="empty-state">No heartbeats</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Event Log</h2>
+            <div class="log-section" id="eventLog"></div>
+        </div>
+    </div>
+
+    <script>
+        // State management
+        const state = {
+            messages: [],
+            instances: {
+                I1: {
+                    status: 'running', // running, shutdown, failed
+                    reservedMessages: [],
+                    lastHeartbeat: null,
+                    heartbeatInterval: null
+                },
+                I2: {
+                    status: 'running',
+                    reservedMessages: [],
+                    lastHeartbeat: null,
+                    heartbeatInterval: null
+                }
+            },
+            messageCounter: 0,
+            eventLog: []
+        };
+
+        const messageColor = { bg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', border: '#4facfe' };
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            state.eventLog.unshift({ timestamp, message, type });
+            if (state.eventLog.length > 50) state.eventLog.pop();
+            renderLog();
+        }
+
+        function renderLog() {
+            const logEl = document.getElementById('eventLog');
+            if (state.eventLog.length === 0) {
+                logEl.innerHTML = '<div class="empty-state">No events yet</div>';
+                return;
+            }
+            logEl.innerHTML = state.eventLog.map(({ timestamp, message, type }) => `
+                <div class="log-entry">
+                    <span class="log-timestamp">[${timestamp}]</span>
+                    <span class="log-${type}">${message}</span>
+                </div>
+            `).join('');
+            logEl.scrollTop = 0;
+        }
+
+        function addMessage() {
+            state.messageCounter++;
+            const messageId = `M${state.messageCounter}`;
+
+            // Find a healthy instance to reserve to
+            const healthyInstances = Object.keys(state.instances).filter(
+                id => state.instances[id].status === 'running'
+            );
+
+            // Round-robin assignment to healthy instances
+            let targetInstance = null;
+            if (healthyInstances.length > 0) {
+                const instanceIndex = (state.messageCounter - 1) % healthyInstances.length;
+                targetInstance = healthyInstances[instanceIndex];
+            }
+
+            const message = {
+                id: messageId,
+                status: targetInstance ? 'reserved' : 'unreserved',
+                instanceId: targetInstance,
+                lastHeartbeat: targetInstance ? new Date() : null
+            };
+
+            state.messages.push(message);
+
+            if (targetInstance) {
+                const instance = state.instances[targetInstance];
+                instance.reservedMessages.push(messageId);
+
+                // Update message heartbeat to match instance
+                if (instance.lastHeartbeat) {
+                    message.lastHeartbeat = instance.lastHeartbeat;
+                }
+
+                // Start heartbeat if not already running
+                startHeartbeat(targetInstance);
+
+                log(`Message ${messageId} reserved to ${targetInstance}`, targetInstance === 'I1' ? 'instance1' : 'instance2');
+            } else {
+                log(`Message ${messageId} added to unreserved pool (no healthy instances)`, 'info');
+            }
+
+            render();
+        }
+
+        function reserveMessages(instanceId) {
+            const instance = state.instances[instanceId];
+            if (instance.status !== 'running') {
+                log(`Cannot reserve messages: ${instanceId} is ${instance.status}`, 'error');
+                return;
+            }
+
+            const unreservedMessages = state.messages.filter(m => m.status === 'unreserved');
+            if (unreservedMessages.length === 0) {
+                log(`${instanceId}: No unreserved messages to reserve`, 'info');
+                return;
+            }
+
+            // Reserve up to 3 messages
+            const toReserve = unreservedMessages.slice(0, 3);
+            toReserve.forEach(msg => {
+                msg.status = 'reserved';
+                msg.instanceId = instanceId;
+                msg.lastHeartbeat = new Date();
+                instance.reservedMessages.push(msg.id);
+
+                // Add moving animation
+                setTimeout(() => {
+                    const msgEl = document.querySelector(`[data-msg-id="${msg.id}"]`);
+                    if (msgEl) msgEl.classList.add('moving');
+                }, 10);
+            });
+
+            log(`${instanceId}: Reserved ${toReserve.length} message(s): ${toReserve.map(m => m.id).join(', ')}`, instanceId === 'I1' ? 'instance1' : 'instance2');
+
+            // Start heartbeat if not already running
+            startHeartbeat(instanceId);
+
+            render();
+        }
+
+        function startHeartbeat(instanceId) {
+            const instance = state.instances[instanceId];
+            if (instance.heartbeatInterval) return;
+
+            instance.lastHeartbeat = new Date();
+            instance.heartbeatInterval = setInterval(() => {
+                if (instance.status === 'running') {
+                    instance.lastHeartbeat = new Date();
+
+                    // Update heartbeat for all reserved messages
+                    state.messages.forEach(msg => {
+                        if (msg.instanceId === instanceId) {
+                            msg.lastHeartbeat = instance.lastHeartbeat;
+                        }
+                    });
+
+                    // Check for failed instances
+                    checkForFailedInstances(instanceId);
+
+                    render();
+                }
+            }, 2000);
+        }
+
+        function checkForFailedInstances(checkingInstanceId) {
+            const now = new Date();
+            Object.keys(state.instances).forEach(instanceId => {
+                if (instanceId === checkingInstanceId) return;
+
+                const instance = state.instances[instanceId];
+                if (instance.status === 'failed' && instance.lastHeartbeat) {
+                    const timeSinceHeartbeat = now - instance.lastHeartbeat;
+                    // If more than 6 seconds since last heartbeat, unreserve messages
+                    if (timeSinceHeartbeat > 6000 && instance.reservedMessages.length > 0) {
+                        log(`${checkingInstanceId}: Detected ${instanceId} failure, unreserving ${instance.reservedMessages.length} message(s)`, 'error');
+                        unreserveMessages(instanceId);
+                        // Clear heartbeat timestamp after detection
+                        instance.lastHeartbeat = null;
+                        render();
+                    }
+                }
+            });
+        }
+
+        function gracefulShutdown(instanceId) {
+            const instance = state.instances[instanceId];
+            if (instance.status !== 'running') {
+                log(`${instanceId} is already ${instance.status}`, 'error');
+                return;
+            }
+
+            log(`${instanceId}: Initiating graceful shutdown...`, instanceId === 'I1' ? 'instance1' : 'instance2');
+            instance.status = 'shutdown';
+
+            // Stop heartbeat
+            if (instance.heartbeatInterval) {
+                clearInterval(instance.heartbeatInterval);
+                instance.heartbeatInterval = null;
+            }
+
+            // Clear heartbeat timestamp
+            instance.lastHeartbeat = null;
+
+            // Unreserve all messages
+            unreserveMessages(instanceId);
+            log(`${instanceId}: Graceful shutdown complete`, instanceId === 'I1' ? 'instance1' : 'instance2');
+
+            render();
+        }
+
+        function crashInstance(instanceId) {
+            const instance = state.instances[instanceId];
+            if (instance.status !== 'running') {
+                log(`${instanceId} is already ${instance.status}`, 'error');
+                return;
+            }
+
+            log(`${instanceId}: CRASHED! Heartbeat stopped.`, 'error');
+            instance.status = 'failed';
+
+            // Stop heartbeat without unreserving messages
+            if (instance.heartbeatInterval) {
+                clearInterval(instance.heartbeatInterval);
+                instance.heartbeatInterval = null;
+            }
+
+            render();
+        }
+
+        function restartInstance(instanceId) {
+            const instance = state.instances[instanceId];
+            log(`${instanceId}: Restarting...`, 'success');
+
+            instance.status = 'running';
+            instance.lastHeartbeat = new Date();
+
+            render();
+        }
+
+        function unreserveMessages(instanceId) {
+            const instance = state.instances[instanceId];
+            const messageIds = [...instance.reservedMessages];
+
+            messageIds.forEach(msgId => {
+                const msg = state.messages.find(m => m.id === msgId);
+                if (msg) {
+                    msg.status = 'unreserved';
+                    msg.instanceId = null;
+                    msg.lastHeartbeat = null;
+                }
+            });
+
+            instance.reservedMessages = [];
+
+            if (messageIds.length > 0) {
+                log(`${instanceId}: Unreserved ${messageIds.length} message(s): ${messageIds.join(', ')}`, instanceId === 'I1' ? 'instance1' : 'instance2');
+            }
+
+            render();
+        }
+
+        function render() {
+            // Render message pool
+            const poolEl = document.getElementById('messagePool');
+            const unreservedMessages = state.messages.filter(m => m.status === 'unreserved');
+            if (unreservedMessages.length === 0) {
+                poolEl.innerHTML = '<div class="empty-state">No unreserved messages</div>';
+            } else {
+                poolEl.innerHTML = unreservedMessages.map(msg => `
+                    <div class="message user-c" data-msg-id="${msg.id}">
+                        <div class="message-id">${msg.id}</div>
+                    </div>
+                `).join('');
+            }
+
+            // Render instances
+            ['I1', 'I2'].forEach(instanceId => {
+                const instance = state.instances[instanceId];
+                const reservedEl = document.getElementById(`reserved${instanceId === 'I1' ? '1' : '2'}`);
+                const heartbeatEl = document.getElementById(`heartbeat${instanceId === 'I1' ? '1' : '2'}`);
+                const heartbeatTimeEl = document.getElementById(`heartbeatTime${instanceId === 'I1' ? '1' : '2'}`);
+                const panelEl = document.getElementById(`instance${instanceId === 'I1' ? '1' : '2'}Panel`);
+
+                // Update panel status
+                panelEl.className = 'instance-panel';
+                if (instance.status === 'failed') {
+                    panelEl.classList.add('failed');
+                } else if (instance.status === 'shutdown') {
+                    panelEl.classList.add('shutdown');
+                }
+
+                // Update heartbeat
+                heartbeatEl.className = 'heartbeat';
+                if (instance.status === 'running') {
+                    // Running - pulsing green
+                } else if (instance.status === 'failed') {
+                    heartbeatEl.classList.add('failed');
+                } else {
+                    heartbeatEl.classList.add('stopped');
+                }
+
+                // Update heartbeat time
+                if (instance.lastHeartbeat) {
+                    heartbeatTimeEl.textContent = `Last: ${instance.lastHeartbeat.toLocaleTimeString()}`;
+                } else {
+                    heartbeatTimeEl.textContent = 'Last: Never';
+                }
+
+                // Render reserved messages
+                const reservedMessages = state.messages.filter(m => m.instanceId === instanceId);
+                if (reservedMessages.length === 0) {
+                    reservedEl.innerHTML = '<div class="empty-state">No reserved messages</div>';
+                } else {
+                    reservedEl.innerHTML = reservedMessages.map(msg => `
+                        <div class="message user-c" data-msg-id="${msg.id}">
+                            <div class="message-id">${msg.id}</div>
+                        </div>
+                    `).join('');
+                }
+            });
+
+            // Render messages database table
+            const dbTableBody = document.getElementById('dbTableBody');
+            if (state.messages.length === 0) {
+                dbTableBody.innerHTML = '<tr><td colspan="3" class="empty-state">No messages in database</td></tr>';
+            } else {
+                dbTableBody.innerHTML = state.messages.map(msg => `
+                    <tr>
+                        <td>${msg.id}</td>
+                        <td><span class="status-badge status-${msg.status}">${msg.status.toUpperCase()}</span></td>
+                        <td>${msg.instanceId || '-'}</td>
+                    </tr>
+                `).join('');
+            }
+
+            // Render heartbeat database table
+            const heartbeatTableBody = document.getElementById('heartbeatTableBody');
+            const instancesWithHeartbeat = Object.keys(state.instances).filter(
+                id => state.instances[id].lastHeartbeat !== null
+            );
+
+            if (instancesWithHeartbeat.length === 0) {
+                heartbeatTableBody.innerHTML = '<tr><td colspan="2" class="empty-state">No heartbeats</td></tr>';
+            } else {
+                heartbeatTableBody.innerHTML = instancesWithHeartbeat.map(instanceId => {
+                    const instance = state.instances[instanceId];
+                    return `
+                        <tr>
+                            <td>${instanceId}</td>
+                            <td>${instance.lastHeartbeat.toLocaleTimeString()}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            // Update stats
+            const unreservedCount = state.messages.filter(m => m.status === 'unreserved').length;
+            const i1Count = state.instances.I1.reservedMessages.length;
+            const i2Count = state.instances.I2.reservedMessages.length;
+            document.getElementById('stats').textContent =
+                `Unreserved: ${unreservedCount} | Instance 1: ${i1Count} messages | Instance 2: ${i2Count} messages`;
+        }
+
+        async function runScenario(type) {
+            resetAll();
+            await sleep(500);
+
+            // Add 5 messages for all scenarios
+            await sleep(300);
+            for (let i = 0; i < 5; i++) {
+                addMessage();
+                await sleep(200);
+            }
+            await sleep(500);
+
+            if (type === 'normal') {
+                log('=== Scenario: Normal Operation ===', 'success');
+                await sleep(500);
+
+                log('=== Scenario Complete ===', 'success');
+            } else if (type === 'graceful') {
+                log('=== Scenario: Graceful Shutdown ===', 'success');
+                await sleep(500);
+
+                await sleep(1500);
+
+                gracefulShutdown('I1');
+                await sleep(1000);
+
+                log('=== Scenario Complete ===', 'success');
+            } else if (type === 'failure') {
+                log('=== Scenario: Instance Failure ===', 'success');
+                await sleep(500);
+
+                await sleep(3000);
+
+                crashInstance('I1');
+                await sleep(3000);
+
+                reserveMessages('I2');
+                log('=== Scenario Complete ===', 'success');
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function resetAll() {
+            // Clear all intervals
+            Object.values(state.instances).forEach(instance => {
+                if (instance.heartbeatInterval) {
+                    clearInterval(instance.heartbeatInterval);
+                }
+            });
+
+            // Reset state
+            state.messages = [];
+            state.instances = {
+                I1: {
+                    status: 'running',
+                    reservedMessages: [],
+                    lastHeartbeat: null,
+                    heartbeatInterval: null
+                },
+                I2: {
+                    status: 'running',
+                    reservedMessages: [],
+                    lastHeartbeat: null,
+                    heartbeatInterval: null
+                }
+            };
+            state.messageCounter = 0;
+            state.eventLog = [];
+
+            render();
+            log('System reset', 'info');
+        }
+
+        // Initial render
+        render();
+    </script>
+</body>
+</html>

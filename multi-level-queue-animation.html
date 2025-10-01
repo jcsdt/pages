@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Level Queue Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f8f9fb;
+            color: #1a1d29;
+            padding: 12px;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 12px;
+            color: #1a1d29;
+            font-weight: 700;
+            font-size: 24px;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 12px;
+            margin-bottom: 8px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .users-queue-section {
+            background: #ffffff;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .user-queues-section {
+            background: #ffffff;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+            color: #1a1d29;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .users-queue {
+            display: flex;
+            gap: 8px;
+            min-height: 60px;
+            background: #f3f4f6;
+            padding: 10px;
+            border-radius: 12px;
+            align-items: center;
+            border: 1px solid #e5e7eb;
+        }
+
+        .user-token {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            border: 2px solid;
+            position: relative;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .user-token.removing {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+
+        .user-token.processing {
+            transform: scale(1.2);
+            box-shadow: 0 0 20px currentColor;
+            transition: all 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: scale(0.5);
+            }
+        }
+
+        .user-token.user-a {
+            background: #4338ca;
+            border-color: #3730a3;
+            color: white;
+        }
+
+        .user-token.user-b {
+            background: #7c3aed;
+            border-color: #6d28d9;
+            color: white;
+        }
+
+        .user-token.user-c {
+            background: #0891b2;
+            border-color: #0e7490;
+            color: white;
+        }
+
+        .user-queue-container {
+            height: 80px;
+            margin-bottom: 12px;
+            transition: opacity 0.3s ease-out;
+        }
+
+        .user-queue-container.removing {
+            opacity: 0;
+        }
+
+        .user-queue-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .user-queue-header .user-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 11px;
+            border: 2px solid;
+        }
+
+        .user-queue {
+            display: flex;
+            gap: 6px;
+            min-height: 45px;
+            background: #f3f4f6;
+            padding: 8px;
+            border-radius: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            border: 1px solid #e5e7eb;
+        }
+
+        .message {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            border: 2px solid;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .message.entering {
+            animation: messageEnter 0.3s ease-out;
+        }
+
+        .message.dequeuing {
+            animation: messageLeave 0.2s ease-out forwards;
+        }
+
+        @keyframes messageEnter {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes messageLeave {
+            to {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+        }
+
+        .dequeued-section {
+            background: #ffffff;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-bottom: 8px;
+        }
+
+        .dequeued-messages {
+            display: flex;
+            gap: 6px;
+            min-height: 50px;
+            background: #f3f4f6;
+            padding: 8px;
+            border-radius: 12px;
+            flex-wrap: wrap;
+            border: 1px solid #e5e7eb;
+        }
+
+        .controls {
+            text-align: center;
+            margin-top: 8px;
+        }
+
+        button {
+            background: #4338ca;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 9999px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 0 6px;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        button:hover:not(:disabled) {
+            background: #3730a3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(67, 56, 202, 0.25);
+        }
+
+        button:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+            transform: none;
+            color: #9ca3af;
+        }
+
+        .stats {
+            margin-top: 8px;
+            padding: 10px;
+            background: #f3f4f6;
+            border-radius: 12px;
+            text-align: center;
+            color: #374151;
+            font-weight: 500;
+            border: 1px solid #e5e7eb;
+            font-size: 12px;
+        }
+
+        .round-robin-indicator {
+            font-size: 12px;
+            color: #4338ca;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Multi-Level Queue - Round Robin FIFO</h1>
+
+        <div class="main-layout">
+            <div class="users-queue-section">
+                <h2>Users Queue (Round Robin)</h2>
+                <div class="users-queue" id="usersQueue"></div>
+                <div class="round-robin-indicator" id="rrIndicator"></div>
+            </div>
+
+            <div class="user-queues-section">
+                <h2>User Message Queues (FIFO)</h2>
+                <div id="userQueuesContainer"></div>
+            </div>
+        </div>
+
+        <div class="dequeued-section">
+            <h2>Dequeued Messages</h2>
+            <div class="dequeued-messages" id="dequeuedMessages"></div>
+        </div>
+
+        <div class="controls">
+            <button onclick="produceMessage('A')">User A: Produce Message</button>
+            <button onclick="produceMessage('B')">User B: Produce Message</button>
+            <button onclick="produceMessage('C')">User C: Produce Message</button>
+            <button onclick="dequeueMessage()" id="dequeueBtn">Dequeue Next Message</button>
+        </div>
+
+        <div class="stats" id="stats">
+            Messages produced: 0 | Messages dequeued: 0
+        </div>
+    </div>
+
+    <script>
+        // State management
+        const state = {
+            userQueues: {
+                'A': [],
+                'B': [],
+                'C': []
+            },
+            usersInQueue: [],
+            dequeuedMessages: [],
+            messageCounter: { 'A': 0, 'B': 0, 'C': 0 },
+            totalProduced: 0,
+            totalDequeued: 0,
+            currentRRIndex: 0,
+            isProcessing: false
+        };
+
+        const userColors = {
+            'A': { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: '#667eea' },
+            'B': { bg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', border: '#f093fb' },
+            'C': { bg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', border: '#4facfe' }
+        };
+
+        function produceMessage(user) {
+            // Increment message counter
+            state.messageCounter[user]++;
+            const messageId = `${user}${state.messageCounter[user]}`;
+
+            // Add message to user's queue
+            state.userQueues[user].push(messageId);
+
+            // Add user to users queue if not already present
+            if (!state.usersInQueue.includes(user)) {
+                state.usersInQueue.push(user);
+            }
+
+            state.totalProduced++;
+            render();
+
+            // Add entering animation to the new message
+            setTimeout(() => {
+                const userQueueEl = document.querySelector(`[data-user="${user}"] .user-queue`);
+                const messages = userQueueEl?.querySelectorAll('.message');
+                if (messages && messages.length > 0) {
+                    messages[messages.length - 1].classList.add('entering');
+                }
+            }, 10);
+        }
+
+        function dequeueMessage() {
+            if (state.usersInQueue.length === 0 || state.isProcessing) {
+                return;
+            }
+
+            // Lock to prevent concurrent dequeue operations
+            state.isProcessing = true;
+            render(); // Update button state
+
+            // Get current user in round-robin
+            const currentUser = state.usersInQueue[state.currentRRIndex];
+
+            // Highlight processing user
+            highlightProcessingUser(currentUser);
+
+            setTimeout(() => {
+                // Get first message from user's queue
+                const message = state.userQueues[currentUser].shift();
+
+                if (message) {
+                    // Animate dequeue
+                    animateDequeue(currentUser, message);
+
+                    setTimeout(() => {
+                        state.totalDequeued++;
+
+                        // Add to dequeued messages
+                        state.dequeuedMessages.push({ id: message, user: currentUser });
+
+                        // Remove user from current position in queue
+                        state.usersInQueue.splice(state.currentRRIndex, 1);
+
+                        // Check if user's queue still has messages
+                        const queueIsEmpty = state.userQueues[currentUser].length === 0;
+
+                        if (!queueIsEmpty) {
+                            // Re-add user at the end of the queue if they still have messages
+                            state.usersInQueue.push(currentUser);
+                        } else {
+                            // Animate removal of empty queue
+                            const queueContainer = document.querySelector(`[data-user="${currentUser}"].user-queue-container`);
+                            if (queueContainer) {
+                                queueContainer.classList.add('removing');
+                            }
+                        }
+
+                        // Adjust index if needed
+                        if (state.currentRRIndex >= state.usersInQueue.length && state.usersInQueue.length > 0) {
+                            state.currentRRIndex = 0;
+                        }
+
+                        // Unlock and render
+                        state.isProcessing = false;
+                        render();
+                    }, 250);
+                } else {
+                    // Unlock if no message found
+                    state.isProcessing = false;
+                    render();
+                }
+            }, 150);
+        }
+
+        function highlightProcessingUser(user) {
+            const tokens = document.querySelectorAll('.user-token');
+            tokens.forEach(token => {
+                if (token.textContent === user) {
+                    token.classList.add('processing');
+                    setTimeout(() => token.classList.remove('processing'), 800);
+                }
+            });
+        }
+
+        function animateDequeue(user, messageId) {
+            const userQueueEl = document.querySelector(`[data-user="${user}"] .user-queue`);
+            const messageEl = userQueueEl?.querySelector('.message');
+            if (messageEl) {
+                messageEl.classList.add('dequeuing');
+            }
+        }
+
+        function render() {
+            // Render users queue
+            const usersQueueEl = document.getElementById('usersQueue');
+            usersQueueEl.innerHTML = state.usersInQueue.map((user, idx) => {
+                const isNext = idx === state.currentRRIndex;
+                return `<div class="user-token user-${user.toLowerCase()} ${isNext ? 'processing' : ''}">${user}</div>`;
+            }).join('');
+
+            // Render round-robin indicator
+            const rrIndicator = document.getElementById('rrIndicator');
+            if (state.usersInQueue.length > 0) {
+                const nextUser = state.usersInQueue[state.currentRRIndex];
+                rrIndicator.textContent = `Next to process: User ${nextUser}`;
+            } else {
+                rrIndicator.textContent = 'No users in queue';
+            }
+
+            // Render user queues - always show all 3 queues, hide empty ones with visibility
+            const userQueuesContainer = document.getElementById('userQueuesContainer');
+            userQueuesContainer.innerHTML = ['A', 'B', 'C'].map(user => {
+                const messages = state.userQueues[user];
+                const hasMessages = messages.length > 0;
+                const displayStyle = hasMessages ? '' : 'style="visibility: hidden; pointer-events: none;"';
+
+                return `
+                    <div class="user-queue-container" data-user="${user}" ${displayStyle}>
+                        <div class="user-queue-header">
+                            <div class="user-icon user-${user.toLowerCase()}" style="background: ${userColors[user].bg}; border-color: ${userColors[user].border};">${user}</div>
+                            <span>User ${user} Queue (${messages.length} messages)</span>
+                        </div>
+                        <div class="user-queue">
+                            ${messages.map((msg, idx) => `
+                                <div class="message user-${user.toLowerCase()}" style="background: ${userColors[user].bg}; border-color: ${userColors[user].border};" data-msg-id="${msg}">
+                                    ${msg}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Render dequeued messages
+            const dequeuedMessagesEl = document.getElementById('dequeuedMessages');
+            dequeuedMessagesEl.innerHTML = state.dequeuedMessages.map(({ id, user }) => `
+                <div class="message user-${user.toLowerCase()}" style="background: ${userColors[user].bg}; border-color: ${userColors[user].border};">
+                    ${id}
+                </div>
+            `).join('');
+
+            // Update stats
+            document.getElementById('stats').textContent =
+                `Messages produced: ${state.totalProduced} | Messages dequeued: ${state.totalDequeued}`;
+
+            // Enable/disable dequeue button
+            document.getElementById('dequeueBtn').disabled = state.usersInQueue.length === 0 || state.isProcessing;
+        }
+
+        // Initial render
+        render();
+    </script>
+</body>
+</html>
