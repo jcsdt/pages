@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Level Queue Animation</title>
+    <title>Multi-Level Queue Scheduler Animation</title>
     <style>
         * {
             margin: 0;
@@ -36,6 +36,13 @@
             font-size: 24px;
         }
 
+        .subtitle {
+            text-align: center;
+            margin-bottom: 12px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
         .main-layout {
             display: grid;
             grid-template-columns: 1fr 2fr;
@@ -45,7 +52,7 @@
             min-height: 0;
         }
 
-        .users-queue-section {
+        .workloads-queue-section {
             background: #ffffff;
             padding: 12px;
             border-radius: 12px;
@@ -53,7 +60,7 @@
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
 
-        .user-queues-section {
+        .workload-queues-section {
             background: #ffffff;
             padding: 12px;
             border-radius: 12px;
@@ -71,7 +78,7 @@
             font-weight: 600;
         }
 
-        .users-queue {
+        .workloads-queue {
             display: flex;
             gap: 8px;
             min-height: 60px;
@@ -82,7 +89,7 @@
             border: 1px solid #e5e7eb;
         }
 
-        .user-token {
+        .workload-token {
             width: 50px;
             height: 50px;
             border-radius: 50%;
@@ -96,11 +103,11 @@
             animation: slideIn 0.3s ease-out;
         }
 
-        .user-token.removing {
+        .workload-token.removing {
             animation: fadeOut 0.5s ease-out forwards;
         }
 
-        .user-token.processing {
+        .workload-token.processing {
             transform: scale(1.2);
             box-shadow: 0 0 20px currentColor;
             transition: all 0.3s ease;
@@ -124,42 +131,42 @@
             }
         }
 
-        .user-token.user-a {
+        .workload-token.workload-a {
             background: #4338ca;
             border-color: #3730a3;
             color: white;
         }
 
-        .user-token.user-b {
+        .workload-token.workload-b {
             background: #7c3aed;
             border-color: #6d28d9;
             color: white;
         }
 
-        .user-token.user-c {
+        .workload-token.workload-c {
             background: #0891b2;
             border-color: #0e7490;
             color: white;
         }
 
-        .user-queue-container {
+        .workload-queue-container {
             height: 80px;
             margin-bottom: 12px;
             transition: opacity 0.3s ease-out;
         }
 
-        .user-queue-container.removing {
+        .workload-queue-container.removing {
             opacity: 0;
         }
 
-        .user-queue-header {
+        .workload-queue-header {
             display: flex;
             align-items: center;
             gap: 10px;
             margin-bottom: 10px;
         }
 
-        .user-queue-header .user-icon {
+        .workload-queue-header .workload-icon {
             width: 24px;
             height: 24px;
             border-radius: 50%;
@@ -171,7 +178,7 @@
             border: 2px solid;
         }
 
-        .user-queue {
+        .workload-queue {
             display: flex;
             gap: 6px;
             min-height: 45px;
@@ -297,18 +304,19 @@
 </head>
 <body>
     <div class="container">
-        <h1>Multi-Level Queue - Round Robin FIFO</h1>
+        <h1>Multi-Level Queue Scheduler</h1>
+        <div class="subtitle">Fair scheduling with round-robin workload selection and FIFO message ordering</div>
 
         <div class="main-layout">
-            <div class="users-queue-section">
-                <h2>Users Queue (Round Robin)</h2>
-                <div class="users-queue" id="usersQueue"></div>
+            <div class="workloads-queue-section">
+                <h2>Workload Queue (Round Robin)</h2>
+                <div class="workloads-queue" id="workloadsQueue"></div>
                 <div class="round-robin-indicator" id="rrIndicator"></div>
             </div>
 
-            <div class="user-queues-section">
-                <h2>User Message Queues (FIFO)</h2>
-                <div id="userQueuesContainer"></div>
+            <div class="workload-queues-section">
+                <h2>Per-Workload Message Queues (FIFO)</h2>
+                <div id="workloadQueuesContainer"></div>
             </div>
         </div>
 
@@ -318,9 +326,9 @@
         </div>
 
         <div class="controls">
-            <button onclick="produceMessage('A')">User A: Produce Message</button>
-            <button onclick="produceMessage('B')">User B: Produce Message</button>
-            <button onclick="produceMessage('C')">User C: Produce Message</button>
+            <button onclick="produceMessage('A')">Workload A: Produce Message</button>
+            <button onclick="produceMessage('B')">Workload B: Produce Message</button>
+            <button onclick="produceMessage('C')">Workload C: Produce Message</button>
             <button onclick="dequeueMessage()" id="dequeueBtn">Dequeue Next Message</button>
         </div>
 
@@ -332,12 +340,12 @@
     <script>
         // State management
         const state = {
-            userQueues: {
+            workloadQueues: {
                 'A': [],
                 'B': [],
                 'C': []
             },
-            usersInQueue: [],
+            workloadsInQueue: [],
             dequeuedMessages: [],
             messageCounter: { 'A': 0, 'B': 0, 'C': 0 },
             totalProduced: 0,
@@ -346,23 +354,23 @@
             isProcessing: false
         };
 
-        const userColors = {
+        const workloadColors = {
             'A': { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: '#667eea' },
             'B': { bg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', border: '#f093fb' },
             'C': { bg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', border: '#4facfe' }
         };
 
-        function produceMessage(user) {
+        function produceMessage(workload) {
             // Increment message counter
-            state.messageCounter[user]++;
-            const messageId = `${user}${state.messageCounter[user]}`;
+            state.messageCounter[workload]++;
+            const messageId = `${workload}${state.messageCounter[workload]}`;
 
-            // Add message to user's queue
-            state.userQueues[user].push(messageId);
+            // Add message to workload's queue
+            state.workloadQueues[workload].push(messageId);
 
-            // Add user to users queue if not already present
-            if (!state.usersInQueue.includes(user)) {
-                state.usersInQueue.push(user);
+            // Add workload to workloads queue if not already present
+            if (!state.workloadsInQueue.includes(workload)) {
+                state.workloadsInQueue.push(workload);
             }
 
             state.totalProduced++;
@@ -370,8 +378,8 @@
 
             // Add entering animation to the new message
             setTimeout(() => {
-                const userQueueEl = document.querySelector(`[data-user="${user}"] .user-queue`);
-                const messages = userQueueEl?.querySelectorAll('.message');
+                const workloadQueueEl = document.querySelector(`[data-workload="${workload}"] .workload-queue`);
+                const messages = workloadQueueEl?.querySelectorAll('.message');
                 if (messages && messages.length > 0) {
                     messages[messages.length - 1].classList.add('entering');
                 }
@@ -379,7 +387,7 @@
         }
 
         function dequeueMessage() {
-            if (state.usersInQueue.length === 0 || state.isProcessing) {
+            if (state.workloadsInQueue.length === 0 || state.isProcessing) {
                 return;
             }
 
@@ -387,45 +395,45 @@
             state.isProcessing = true;
             render(); // Update button state
 
-            // Get current user in round-robin
-            const currentUser = state.usersInQueue[state.currentRRIndex];
+            // Get current workload in round-robin
+            const currentWorkload = state.workloadsInQueue[state.currentRRIndex];
 
-            // Highlight processing user
-            highlightProcessingUser(currentUser);
+            // Highlight processing workload
+            highlightProcessingWorkload(currentWorkload);
 
             setTimeout(() => {
-                // Get first message from user's queue
-                const message = state.userQueues[currentUser].shift();
+                // Get first message from workload's queue
+                const message = state.workloadQueues[currentWorkload].shift();
 
                 if (message) {
                     // Animate dequeue
-                    animateDequeue(currentUser, message);
+                    animateDequeue(currentWorkload, message);
 
                     setTimeout(() => {
                         state.totalDequeued++;
 
                         // Add to dequeued messages
-                        state.dequeuedMessages.push({ id: message, user: currentUser });
+                        state.dequeuedMessages.push({ id: message, workload: currentWorkload });
 
-                        // Remove user from current position in queue
-                        state.usersInQueue.splice(state.currentRRIndex, 1);
+                        // Remove workload from current position in queue
+                        state.workloadsInQueue.splice(state.currentRRIndex, 1);
 
-                        // Check if user's queue still has messages
-                        const queueIsEmpty = state.userQueues[currentUser].length === 0;
+                        // Check if workload's queue still has messages
+                        const queueIsEmpty = state.workloadQueues[currentWorkload].length === 0;
 
                         if (!queueIsEmpty) {
-                            // Re-add user at the end of the queue if they still have messages
-                            state.usersInQueue.push(currentUser);
+                            // Re-add workload at the end of the queue if they still have messages
+                            state.workloadsInQueue.push(currentWorkload);
                         } else {
                             // Animate removal of empty queue
-                            const queueContainer = document.querySelector(`[data-user="${currentUser}"].user-queue-container`);
+                            const queueContainer = document.querySelector(`[data-workload="${currentWorkload}"].workload-queue-container`);
                             if (queueContainer) {
                                 queueContainer.classList.add('removing');
                             }
                         }
 
                         // Adjust index if needed
-                        if (state.currentRRIndex >= state.usersInQueue.length && state.usersInQueue.length > 0) {
+                        if (state.currentRRIndex >= state.workloadsInQueue.length && state.workloadsInQueue.length > 0) {
                             state.currentRRIndex = 0;
                         }
 
@@ -441,57 +449,57 @@
             }, 150);
         }
 
-        function highlightProcessingUser(user) {
-            const tokens = document.querySelectorAll('.user-token');
+        function highlightProcessingWorkload(workload) {
+            const tokens = document.querySelectorAll('.workload-token');
             tokens.forEach(token => {
-                if (token.textContent === user) {
+                if (token.textContent === workload) {
                     token.classList.add('processing');
                     setTimeout(() => token.classList.remove('processing'), 800);
                 }
             });
         }
 
-        function animateDequeue(user, messageId) {
-            const userQueueEl = document.querySelector(`[data-user="${user}"] .user-queue`);
-            const messageEl = userQueueEl?.querySelector('.message');
+        function animateDequeue(workload, messageId) {
+            const workloadQueueEl = document.querySelector(`[data-workload="${workload}"] .workload-queue`);
+            const messageEl = workloadQueueEl?.querySelector('.message');
             if (messageEl) {
                 messageEl.classList.add('dequeuing');
             }
         }
 
         function render() {
-            // Render users queue
-            const usersQueueEl = document.getElementById('usersQueue');
-            usersQueueEl.innerHTML = state.usersInQueue.map((user, idx) => {
+            // Render workloads queue
+            const workloadsQueueEl = document.getElementById('workloadsQueue');
+            workloadsQueueEl.innerHTML = state.workloadsInQueue.map((workload, idx) => {
                 const isNext = idx === state.currentRRIndex;
-                return `<div class="user-token user-${user.toLowerCase()} ${isNext ? 'processing' : ''}">${user}</div>`;
+                return `<div class="workload-token workload-${workload.toLowerCase()} ${isNext ? 'processing' : ''}">${workload}</div>`;
             }).join('');
 
             // Render round-robin indicator
             const rrIndicator = document.getElementById('rrIndicator');
-            if (state.usersInQueue.length > 0) {
-                const nextUser = state.usersInQueue[state.currentRRIndex];
-                rrIndicator.textContent = `Next to process: User ${nextUser}`;
+            if (state.workloadsInQueue.length > 0) {
+                const nextWorkload = state.workloadsInQueue[state.currentRRIndex];
+                rrIndicator.textContent = `Next to process: Workload ${nextWorkload}`;
             } else {
-                rrIndicator.textContent = 'No users in queue';
+                rrIndicator.textContent = 'No workloads in queue';
             }
 
-            // Render user queues - always show all 3 queues, hide empty ones with visibility
-            const userQueuesContainer = document.getElementById('userQueuesContainer');
-            userQueuesContainer.innerHTML = ['A', 'B', 'C'].map(user => {
-                const messages = state.userQueues[user];
+            // Render workload queues - always show all 3 queues, hide empty ones with visibility
+            const workloadQueuesContainer = document.getElementById('workloadQueuesContainer');
+            workloadQueuesContainer.innerHTML = ['A', 'B', 'C'].map(workload => {
+                const messages = state.workloadQueues[workload];
                 const hasMessages = messages.length > 0;
                 const displayStyle = hasMessages ? '' : 'style="visibility: hidden; pointer-events: none;"';
 
                 return `
-                    <div class="user-queue-container" data-user="${user}" ${displayStyle}>
-                        <div class="user-queue-header">
-                            <div class="user-icon user-${user.toLowerCase()}" style="background: ${userColors[user].bg}; border-color: ${userColors[user].border};">${user}</div>
-                            <span>User ${user} Queue (${messages.length} messages)</span>
+                    <div class="workload-queue-container" data-workload="${workload}" ${displayStyle}>
+                        <div class="workload-queue-header">
+                            <div class="workload-icon workload-${workload.toLowerCase()}" style="background: ${workloadColors[workload].bg}; border-color: ${workloadColors[workload].border};">${workload}</div>
+                            <span>Workload ${workload} Queue (${messages.length} messages)</span>
                         </div>
-                        <div class="user-queue">
+                        <div class="workload-queue">
                             ${messages.map((msg, idx) => `
-                                <div class="message user-${user.toLowerCase()}" style="background: ${userColors[user].bg}; border-color: ${userColors[user].border};" data-msg-id="${msg}">
+                                <div class="message workload-${workload.toLowerCase()}" style="background: ${workloadColors[workload].bg}; border-color: ${workloadColors[workload].border};" data-msg-id="${msg}">
                                     ${msg}
                                 </div>
                             `).join('')}
@@ -502,8 +510,8 @@
 
             // Render dequeued messages
             const dequeuedMessagesEl = document.getElementById('dequeuedMessages');
-            dequeuedMessagesEl.innerHTML = state.dequeuedMessages.map(({ id, user }) => `
-                <div class="message user-${user.toLowerCase()}" style="background: ${userColors[user].bg}; border-color: ${userColors[user].border};">
+            dequeuedMessagesEl.innerHTML = state.dequeuedMessages.map(({ id, workload }) => `
+                <div class="message workload-${workload.toLowerCase()}" style="background: ${workloadColors[workload].bg}; border-color: ${workloadColors[workload].border};">
                     ${id}
                 </div>
             `).join('');
@@ -513,7 +521,7 @@
                 `Messages produced: ${state.totalProduced} | Messages dequeued: ${state.totalDequeued}`;
 
             // Enable/disable dequeue button
-            document.getElementById('dequeueBtn').disabled = state.usersInQueue.length === 0 || state.isProcessing;
+            document.getElementById('dequeueBtn').disabled = state.workloadsInQueue.length === 0 || state.isProcessing;
         }
 
         // Initial render
